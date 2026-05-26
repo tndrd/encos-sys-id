@@ -1,0 +1,10 @@
+{
+  "status": "ok",
+  "runner": "run_single_motor_torque_opt",
+  "samples": 20377,
+  "last_epoch": 2074,
+  "epochs_ran": 2075,
+  "best_loss": 560.2541892118636,
+  "final_loss": 560.254679791341,
+  "final_grad_norm": 48.180805632626516
+}

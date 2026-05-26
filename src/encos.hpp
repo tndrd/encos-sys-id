@@ -59,6 +59,7 @@ struct Controller {
   struct State {
     float pos; // rad
     float spd; // rad/s
+    float cur; // A
   };
  private:
   CANInterface m_can;

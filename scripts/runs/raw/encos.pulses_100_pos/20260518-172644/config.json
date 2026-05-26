@@ -1,0 +1,74 @@
+{
+  "runner": "sysidmjx.optimizers.single_motor.run_single_motor_torque_opt",
+  "data": {
+    "dataset_path": "assets/datasets/encos/pulses.csv",
+    "dt": 0.001,
+    "motor_id": 0,
+    "num_lags": 100
+  },
+  "data_test": null,
+  "sim": {
+    "model_xml": "assets/robots/encos/motor_encos.xml",
+    "integrator": "mjtIntegrator.mjINT_EULER",
+    "iterations": 1
+  },
+  "train": {
+    "seed": 3,
+    "max_iter": 5000,
+    "batch_size": 2000,
+    "learning_rate": 0.02,
+    "early_stop_patience": 200,
+    "early_stop_min_delta": 0.0,
+    "loss_w_qpos": 100.0,
+    "loss_w_qvel": 0.0
+  },
+  "experiment": {
+    "name": "Optimal torque",
+    "controllers": [
+      {
+        "func": "sysidmjx.models.get_controller_torque",
+        "params": {}
+      }
+    ],
+    "frictions": [],
+    "changers": [
+      {
+        "func": "sysidmjx.models.make_changer_armature",
+        "params": {
+          "armature_init": {
+            "min": 0.0,
+            "max": 0.01
+          }
+        }
+      },
+      {
+        "func": "sysidmjx.models.make_changer_damping",
+        "params": {
+          "damping_init": {
+            "min": 0.0,
+            "max": 0.01
+          }
+        }
+      },
+      {
+        "func": "sysidmjx.models.make_changer_frictionloss",
+        "params": {
+          "frictionloss_init": {
+            "min": 0.0,
+            "max": 0.01
+          }
+        }
+      }
+    ]
+  },
+  "assets": {
+    "assets_root": "assets",
+    "robot_assets_subdir": "robots",
+    "dataset_assets_subdir": "datasets"
+  },
+  "logging": {
+    "runs_root": "runs",
+    "log_every": 1,
+    "checkpoint_every": 100
+  }
+}

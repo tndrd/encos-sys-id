@@ -179,6 +179,7 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos, float
   static constexpr float posMax = 10.0f;
   static constexpr float velMax = 20.0f;
   static constexpr float trqMax = 90.0f;
+  static constexpr float curMax = 30.0f;
 
   uint16_t p_int = float2uint(pos, -posMax, posMax, 16);
   uint16_t v_int = float2uint(vel, -velMax, velMax, 12);
@@ -213,6 +214,9 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos, float
   
   v_int = (data[3] << 4) | (data[4] >> 4);
   state.spd = uint2float(v_int, -velMax, velMax, 12);
+
+  t_int = ((data[4] & 0xF) << 8) | data[5];
+  state.cur = uint2float(t_int, -curMax, curMax, 12);
 
   return state;
 }
