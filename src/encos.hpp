@@ -57,9 +57,11 @@ void setZero(const std::string& interface);
 struct Controller {
  public:
   struct State {
-    float pos; // rad
-    float spd; // rad/s
+    float pos;  // rad
+    float spd;  // rad/s
+    float cur;  // A
   };
+
  private:
   CANInterface m_can;
 

@@ -77,7 +77,7 @@ Descriptor CANInterface::makeSocket(const std::string& interface) {
   timeval tv;
   tv.tv_sec = timeoutMs / 1000;
   tv.tv_usec = (timeoutMs % 1000) * 1000;
-  if(setsockopt(*fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+  if (setsockopt(*fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
     throw std::runtime_error("setsockopt(): "s + strerror(errno));
 
   // Get interface index
@@ -152,7 +152,7 @@ void Tools::setZero(const std::string& interface) {
   std::swap(idByte[0], idByte[1]);
 
   CANInterface can{interface};
-  uint8_t cmd [4] = {idByte[0], idByte[1], 0x00, 0x03};
+  uint8_t cmd[4] = {idByte[0], idByte[1], 0x00, 0x03};
 
   can.send(0x7ff, 4, cmd);
 
@@ -166,11 +166,10 @@ void Tools::setZero(const std::string& interface) {
   assert(cmd[3] == 0x03 && "Drive refused to set zero");
 }
 
-Controller::Controller(const std::string& interface)
-    : m_can{interface} {}
+Controller::Controller(const std::string& interface) : m_can{interface} {}
 
-auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos, float vel,
-                           float trq) -> State {
+auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
+                               float vel, float trq) -> State {
   using namespace Helpers;
 
   // Values' scales for encoding
@@ -179,6 +178,7 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos, float
   static constexpr float posMax = 10.0f;
   static constexpr float velMax = 20.0f;
   static constexpr float trqMax = 90.0f;
+  static constexpr float curMax = 30.0f;
 
   uint16_t p_int = float2uint(pos, -posMax, posMax, 16);
   uint16_t v_int = float2uint(vel, -velMax, velMax, 12);
@@ -210,9 +210,12 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos, float
 
   p_int = (data[1] << 8) | data[2];
   state.pos = uint2float(p_int, -posMax, posMax, 16);
-  
+
   v_int = (data[3] << 4) | (data[4] >> 4);
   state.spd = uint2float(v_int, -velMax, velMax, 12);
+
+  t_int = ((data[4] & 0xF) << 8) | data[5];
+  state.cur = uint2float(t_int, -curMax, curMax, 12);
 
   return state;
 }

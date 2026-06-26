@@ -9,10 +9,22 @@ PYBIND11_MODULE(PYTHON_MODULE_NAME, m) {
       "ENCOS drive identification tools.\n"
       "Author: Lekhterev V.V. @tndrd, WaveLab 2026";
 
-  py::class_<SignalGenerator>(m, "SignalGenerator")
-      .def(py::init<const std::string&, uint8_t>(),
-           py::arg("interface") = "can0", py::arg("drive_id") = 1)
+  m.def("get_id", &Encos::Tools::getId);
+  m.def("set_zero", &Encos::Tools::setZero);
 
+  py::class_<SignalGenerator> gen(m, "SignalGenerator");
+
+  gen.def(py::init<const std::string &, uint8_t>(),
+          py::arg("interface") = "can0", py::arg("drive_id") = 1)
       .def("play_signal", &SignalGenerator::playSignal, py::arg("signal"),
-           py::arg("dtms"));
+           py::arg("dtms"))
+      .def("brake", &SignalGenerator::brake)
+      .def("release", &SignalGenerator::release)
+      .def("set_mode", &SignalGenerator::setMode, py::arg("mode"),
+           py::arg("kmode") = 0);
+
+  py::enum_<SignalGenerator::Mode>(gen, "mode")
+      .value("position", SignalGenerator::Mode::Position)
+      .value("velocity", SignalGenerator::Mode::Velocity)
+      .value("torque", SignalGenerator::Mode::Torque);
 }
