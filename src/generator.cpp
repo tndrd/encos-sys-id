@@ -77,6 +77,39 @@ void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
   m_encos.hybridControl(m_id, 0, 0, 0, 0, 0);
 }
 
+void SignalGenerator::playPDSignalLoop(const std::vector<float> &pos_signal,
+                                       const std::vector<float> &vel_signal,
+                                       float kp, float kd, float dtms) {
+  if (pos_signal.size() != vel_signal.size())
+    fatal("position and velocity signal lengths differ");
+
+  timespec ts_next;
+  clock_gettime(CLOCK_MONOTONIC, &ts_next);
+
+  m_pos = std::vector<float>(pos_signal.size(), 0);
+  m_spd = std::vector<float>(pos_signal.size(), 0);
+  m_cur = std::vector<float>(pos_signal.size(), 0);
+
+  for (size_t i = 0; i < pos_signal.size(); ++i) {
+    auto state = m_encos.hybridControl(m_id, kp, kd, pos_signal[i],
+                                       vel_signal[i], 0);
+    m_pos[i] = state.pos;
+    m_spd[i] = state.spd;
+    m_cur[i] = state.cur;
+
+    ts_next.tv_nsec += long(dtms * 1000) * 1000;
+
+    if (ts_next.tv_nsec >= 1000000000) {
+      ts_next.tv_sec++;
+      ts_next.tv_nsec -= 1000000000;
+    }
+
+    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_next, NULL);
+  }
+
+  m_encos.hybridControl(m_id, 0, 0, 0, 0, 0);
+}
+
 void SignalGenerator::playSignalRoutine(SignalGenerator *self,
                                         const std::vector<float> &signal,
                                         float dtms) {
@@ -85,6 +118,20 @@ void SignalGenerator::playSignalRoutine(SignalGenerator *self,
   try {
     schedSetup();
     self->playSignalLoop(signal, dtms);
+  } catch (std::exception &e) {
+    /// @todo properly catch the dynamic type of e
+    self->m_exception = std::make_unique<std::runtime_error>(e.what());
+  }
+}
+
+void SignalGenerator::playPDSignalRoutine(
+    SignalGenerator *self, const std::vector<float> &pos_signal,
+    const std::vector<float> &vel_signal, float kp, float kd, float dtms) {
+  assert(self);
+  self->m_exception = nullptr;
+  try {
+    schedSetup();
+    self->playPDSignalLoop(pos_signal, vel_signal, kp, kd, dtms);
   } catch (std::exception &e) {
     /// @todo properly catch the dynamic type of e
     self->m_exception = std::make_unique<std::runtime_error>(e.what());
@@ -112,6 +159,19 @@ std::vector<std::vector<float>> SignalGenerator::playSignal(
     const std::vector<float> &signal, float dtms) {
   std::thread thread(SignalGenerator::playSignalRoutine, this,
                      std::cref(signal), dtms);
+  thread.join();
+
+  if (m_exception.get()) throw *m_exception;
+
+  return {m_pos, m_spd, m_cur};
+}
+
+std::vector<std::vector<float>> SignalGenerator::playPDSignal(
+    const std::vector<float> &pos_signal, const std::vector<float> &vel_signal,
+    float kp, float kd, float dtms) {
+  std::thread thread(SignalGenerator::playPDSignalRoutine, this,
+                     std::cref(pos_signal), std::cref(vel_signal), kp, kd,
+                     dtms);
   thread.join();
 
   if (m_exception.get()) throw *m_exception;

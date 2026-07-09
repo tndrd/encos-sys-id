@@ -42,8 +42,15 @@ struct SignalGenerator {
 
  private:
   void playSignalLoop(const std::vector<float>& signal, float dtms);
+  void playPDSignalLoop(const std::vector<float>& pos_signal,
+                        const std::vector<float>& vel_signal, float kp,
+                        float kd, float dtms);
   static void playSignalRoutine(SignalGenerator* self,
                                 const std::vector<float>& signal, float dtms);
+  static void playPDSignalRoutine(SignalGenerator* self,
+                                  const std::vector<float>& pos_signal,
+                                  const std::vector<float>& vel_signal,
+                                  float kp, float kd, float dtms);
 
   static void brakeRoutine(SignalGenerator* self, float kp, float kd);
 
@@ -54,6 +61,17 @@ struct SignalGenerator {
   /// @return responce: vector {position, velocity, current}
   std::vector<std::vector<float>> playSignal(const std::vector<float>& signal,
                                              float dtms);
+
+  /// @brief Apply position/velocity targets with fixed PD gains and measure response
+  /// @param pos_signal target position signal, rad
+  /// @param vel_signal target velocity signal, rad/s
+  /// @param kp position gain, 0 <= kp <= 500
+  /// @param kd velocity gain, 0 <= kd <= 10
+  /// @param dtms sample period in milliseconds
+  /// @return responce: vector {position, velocity, current}
+  std::vector<std::vector<float>> playPDSignal(
+      const std::vector<float>& pos_signal,
+      const std::vector<float>& vel_signal, float kp, float kd, float dtms);
 
   /// @brief Enable braking mode. Holds current position and zero velocity.
   /// @param kp 0 <= kp <= 500

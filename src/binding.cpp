@@ -18,6 +18,9 @@ PYBIND11_MODULE(PYTHON_MODULE_NAME, m) {
           py::arg("interface") = "can0", py::arg("drive_id") = 1)
       .def("play_signal", &SignalGenerator::playSignal, py::arg("signal"),
            py::arg("dtms"))
+      .def("play_pd_signal", &SignalGenerator::playPDSignal,
+           py::arg("pos_signal"), py::arg("vel_signal"), py::arg("kp"),
+           py::arg("kd"), py::arg("dtms"))
       .def("brake", &SignalGenerator::brake)
       .def("release", &SignalGenerator::release)
       .def("set_mode", &SignalGenerator::setMode, py::arg("mode"),

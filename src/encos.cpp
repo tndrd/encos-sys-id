@@ -174,9 +174,9 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
 
   // Values' scales for encoding
   static constexpr float kpMax = 500.f;
-  static constexpr float kdMax = 10.0f;
-  static constexpr float posMax = 10.0f;
-  static constexpr float velMax = 20.0f;
+  static constexpr float kdMax = 5.0f;
+  static constexpr float posMax = 12.5f;
+  static constexpr float velMax = 18.0f;
   static constexpr float trqMax = 90.0f;
   static constexpr float curMax = 30.0f;
 

@@ -1,3 +1,4 @@
 scripts/datasets/*
 .vscode/
 build/
+__pycache__/
