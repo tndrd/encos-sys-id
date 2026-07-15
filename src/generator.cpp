@@ -36,9 +36,10 @@ static void schedSetup() {
 SignalGenerator::SignalGenerator(const std::string &interface, uint8_t id)
     : m_encos{interface}, m_id{id} {}
 
-void SignalGenerator::setMode(Mode mode, float kmode) {
+void SignalGenerator::setMode(Mode mode, float kp, float kd) {
   m_mode = mode;
-  m_kmode = kmode;
+  m_kp = kp;
+  m_kd = kd;
 }
 
 void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
@@ -52,14 +53,10 @@ void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
 
   for (size_t i = 0; i < signal.size(); ++i) {
     float pos = (m_mode == Mode::Position) ? signal[i] : 0;
-    float kp = (m_mode == Mode::Position) ? m_kmode : 0;
-
     float vel = (m_mode == Mode::Velocity) ? signal[i] : 0;
-    float kd = (m_mode == Mode::Velocity) ? m_kmode : 0;
-
     float trq = (m_mode == Mode::Torque) ? signal[i] : 0;
 
-    auto state = m_encos.hybridControl(m_id, kp, kd, pos, vel, trq);
+    auto state = m_encos.hybridControl(m_id, m_kp, m_kd, pos, vel, trq);
     m_pos[i] = state.pos;
     m_spd[i] = state.spd;
     m_cur[i] = state.cur;

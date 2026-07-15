@@ -26,7 +26,8 @@ struct SignalGenerator {
   std::unique_ptr<std::thread> m_brake_thread = nullptr;
 
   Mode m_mode = Mode::Torque;
-  float m_kmode = 0;
+  float m_kp = 0;
+  float m_kd = 0;
 
  public:
   /// @brief Ctor
@@ -36,9 +37,10 @@ struct SignalGenerator {
 
   /// @brief Set signal mode: torque, position or velocity
   /// @param mode mode
-  /// @param kmode corresponding constant (kp for position, kd for velocity).
+  /// @param kp kp for position 
+  /// @param kd kd for velocity/damping
   /// Value is ignored in torque mode
-  void setMode(Mode mode, float kmode);
+  void setMode(Mode mode, float kp = 0, float kd = 0);
 
  private:
   void playSignalLoop(const std::vector<float>& signal, float dtms);
