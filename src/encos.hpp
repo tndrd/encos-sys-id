@@ -53,17 +53,49 @@ uint16_t getId(const std::string& interface);
 void setZero(const std::string& interface);
 }  // namespace Tools
 
+struct Scales {
+  float kp, kd, pos, vel, trq, cur;
+
+  /// @brief Get scales by motor documentation
+  /// @return Standard scales
+  static Scales factory();
+
+  /// @brief Get tuned scales (applicable for most older motors)
+  /// @return Tuned scales
+  static Scales tuned();
+};
+
 // Encos controller
 struct Controller {
  public:
+  struct Error {
+    enum Type: uint8_t {
+      // clang-format off
+      NoError          = 0,
+      OverTemperature  = 1,
+      OverCurrent      = 2,
+      UnderVoltage     = 3,
+      EncoderError     = 4,
+      BrakeOverVoltage = 6,
+      DriverError      = 7
+      // clang-format on
+    } code;
+
+    const char* string() const;
+  };
+
   struct State {
     float pos;  // rad
     float spd;  // rad/s
     float cur;  // A
+    Error err;
   };
 
  private:
   CANInterface m_can;
+
+ public:
+  Scales m_scales = Scales::tuned();
 
  public:
   /// @brief Create a drive interface

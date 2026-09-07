@@ -24,7 +24,8 @@ PYBIND11_MODULE(PYTHON_MODULE_NAME, m) {
       .def("brake", &SignalGenerator::brake)
       .def("release", &SignalGenerator::release)
       .def("set_mode", &SignalGenerator::setMode, py::arg("mode"),
-           py::arg("kmode") = 0);
+           py::arg("kmode") = 0)
+      .def("set_factory_scales", &SignalGenerator::setFactoryScales);
 
   py::enum_<SignalGenerator::Mode>(gen, "mode")
       .value("position", SignalGenerator::Mode::Position)

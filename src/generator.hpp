@@ -6,12 +6,18 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <tuple>
+#include <string>
 
 #include "encos.hpp"
 
 struct SignalGenerator {
   enum class Mode { Position, Velocity, Torque };
 
+  using Responce = std::tuple<std::vector<float>,
+                              std::vector<float>,
+                              std::vector<float>,
+                              std::vector<const char*>>;
  private:
   Encos::Controller m_encos;
   uint8_t m_id;
@@ -19,6 +25,7 @@ struct SignalGenerator {
   std::vector<float> m_pos;
   std::vector<float> m_spd;
   std::vector<float> m_cur;
+  std::vector<const char*> m_err;
 
   std::unique_ptr<std::runtime_error> m_exception;
 
@@ -40,6 +47,11 @@ struct SignalGenerator {
   /// Value is ignored in torque mode
   void setMode(Mode mode, float kmode);
 
+  /// @brief Set factory scales for motor IO encoding/decoding
+  /// @param use_factory_scale specifies whether a factory or a default scale should be used
+  /// @note tuned scales are used by default
+  void setFactoryScales(bool use_factory_scale);
+
  private:
   void playSignalLoop(const std::vector<float>& signal, float dtms);
   void playPDSignalLoop(const std::vector<float>& pos_signal,
@@ -58,8 +70,8 @@ struct SignalGenerator {
   /// @brief Apply control signal and measure responce
   /// @param signal control signal (see `setMode`)
   /// @param dtms sample period in milliseconds
-  /// @return responce: vector {position, velocity, current}
-  std::vector<std::vector<float>> playSignal(const std::vector<float>& signal,
+  /// @return responce: tuple {position, velocity, current, string}
+  Responce playSignal(const std::vector<float>& signal,
                                              float dtms);
 
   /// @brief Apply position/velocity targets with fixed PD gains and measure response
@@ -68,8 +80,8 @@ struct SignalGenerator {
   /// @param kp position gain, 0 <= kp <= 500
   /// @param kd velocity gain, 0 <= kd <= 10
   /// @param dtms sample period in milliseconds
-  /// @return responce: vector {position, velocity, current}
-  std::vector<std::vector<float>> playPDSignal(
+  /// @return responce: tuple {position, velocity, current, error}
+  Responce playPDSignal(
       const std::vector<float>& pos_signal,
       const std::vector<float>& vel_signal, float kp, float kd, float dtms);
 

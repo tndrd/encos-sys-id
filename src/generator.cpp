@@ -41,6 +41,11 @@ void SignalGenerator::setMode(Mode mode, float kmode) {
   m_kmode = kmode;
 }
 
+void SignalGenerator::setFactoryScales(bool use_factory_scale) {
+  m_encos.m_scales =
+      use_factory_scale ? Encos::Scales::factory() : Encos::Scales::tuned();
+}
+
 void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
                                      float dtms) {
   timespec ts_next;
@@ -49,6 +54,7 @@ void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
   m_pos = std::vector<float>(signal.size(), 0);
   m_spd = std::vector<float>(signal.size(), 0);
   m_cur = std::vector<float>(signal.size(), 0);
+  m_err = std::vector<const char*>(signal.size(), 0);
 
   for (size_t i = 0; i < signal.size(); ++i) {
     float pos = (m_mode == Mode::Position) ? signal[i] : 0;
@@ -63,6 +69,7 @@ void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
     m_pos[i] = state.pos;
     m_spd[i] = state.spd;
     m_cur[i] = state.cur;
+    m_err[i] = state.err.string();
 
     ts_next.tv_nsec += long(dtms * 1000) * 1000;
 
@@ -89,13 +96,15 @@ void SignalGenerator::playPDSignalLoop(const std::vector<float> &pos_signal,
   m_pos = std::vector<float>(pos_signal.size(), 0);
   m_spd = std::vector<float>(pos_signal.size(), 0);
   m_cur = std::vector<float>(pos_signal.size(), 0);
+  m_err = std::vector<const char*>(pos_signal.size(), 0);
 
   for (size_t i = 0; i < pos_signal.size(); ++i) {
-    auto state = m_encos.hybridControl(m_id, kp, kd, pos_signal[i],
-                                       vel_signal[i], 0);
+    auto state =
+        m_encos.hybridControl(m_id, kp, kd, pos_signal[i], vel_signal[i], 0);
     m_pos[i] = state.pos;
     m_spd[i] = state.spd;
     m_cur[i] = state.cur;
+    m_err[i] = state.err.string();
 
     ts_next.tv_nsec += long(dtms * 1000) * 1000;
 
@@ -124,9 +133,10 @@ void SignalGenerator::playSignalRoutine(SignalGenerator *self,
   }
 }
 
-void SignalGenerator::playPDSignalRoutine(
-    SignalGenerator *self, const std::vector<float> &pos_signal,
-    const std::vector<float> &vel_signal, float kp, float kd, float dtms) {
+void SignalGenerator::playPDSignalRoutine(SignalGenerator *self,
+                                          const std::vector<float> &pos_signal,
+                                          const std::vector<float> &vel_signal,
+                                          float kp, float kd, float dtms) {
   assert(self);
   self->m_exception = nullptr;
   try {
@@ -155,20 +165,20 @@ void SignalGenerator::brakeRoutine(SignalGenerator *self, float kp, float kd) {
   }
 }
 
-std::vector<std::vector<float>> SignalGenerator::playSignal(
-    const std::vector<float> &signal, float dtms) {
+auto SignalGenerator::playSignal(const std::vector<float> &signal, float dtms)
+    -> Responce {
   std::thread thread(SignalGenerator::playSignalRoutine, this,
                      std::cref(signal), dtms);
   thread.join();
 
   if (m_exception.get()) throw *m_exception;
 
-  return {m_pos, m_spd, m_cur};
+  return {m_pos, m_spd, m_cur, m_err};
 }
 
-std::vector<std::vector<float>> SignalGenerator::playPDSignal(
-    const std::vector<float> &pos_signal, const std::vector<float> &vel_signal,
-    float kp, float kd, float dtms) {
+auto SignalGenerator::playPDSignal(const std::vector<float> &pos_signal,
+                                   const std::vector<float> &vel_signal,
+                                   float kp, float kd, float dtms) -> Responce {
   std::thread thread(SignalGenerator::playPDSignalRoutine, this,
                      std::cref(pos_signal), std::cref(vel_signal), kp, kd,
                      dtms);
@@ -176,7 +186,7 @@ std::vector<std::vector<float>> SignalGenerator::playPDSignal(
 
   if (m_exception.get()) throw *m_exception;
 
-  return {m_pos, m_spd, m_cur};
+  return {m_pos, m_spd, m_cur, m_err};
 }
 
 void SignalGenerator::brake(float kp, float kd) {

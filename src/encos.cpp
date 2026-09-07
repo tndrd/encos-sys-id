@@ -166,6 +166,45 @@ void Tools::setZero(const std::string& interface) {
   assert(cmd[3] == 0x03 && "Drive refused to set zero");
 }
 
+Scales Scales::factory() {
+  return {
+      500.f,  // kp
+      5.0f,   // kd
+      12.5f,  // pos
+      18.0f,  // vel
+      90.0f,  // trq
+      30.0f,  // cur
+  };
+}
+
+Scales Scales::tuned() {
+  return {
+      500.f,  // kp
+      10.0f,  // kd
+      10.0f,  // pos
+      20.0f,  // vel
+      90.0f,  // trq
+      30.0f,  // cur
+  };
+}
+
+const char* Controller::Error::string() const {
+  switch (code) {
+    // clang-format off
+    #define CASE(x) case x: return #x
+    CASE(NoError);
+    CASE(OverTemperature);
+    CASE(OverCurrent);
+    CASE(UnderVoltage);
+    CASE(EncoderError);
+    CASE(BrakeOverVoltage);
+    CASE(DriverError);
+    default: return "UnknownError";
+    #undef case
+      // clang-format on
+  }
+}
+
 Controller::Controller(const std::string& interface) : m_can{interface} {}
 
 auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
@@ -173,12 +212,12 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
   using namespace Helpers;
 
   // Values' scales for encoding
-  static constexpr float kpMax = 500.f;
-  static constexpr float kdMax = 5.0f;
-  static constexpr float posMax = 12.5f;
-  static constexpr float velMax = 18.0f;
-  static constexpr float trqMax = 90.0f;
-  static constexpr float curMax = 30.0f;
+  const float& kpMax = m_scales.kp;
+  const float& kdMax = m_scales.kd;
+  const float& posMax = m_scales.pos;
+  const float& velMax = m_scales.vel;
+  const float& trqMax = m_scales.trq;
+  const float& curMax = m_scales.cur;
 
   uint16_t p_int = float2uint(pos, -posMax, posMax, 16);
   uint16_t v_int = float2uint(vel, -velMax, velMax, 12);
@@ -207,6 +246,10 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
   assert((data[0] & 0b11100000) == 0b00100000);
 
   State state;
+
+  assert(data[0] == 0b00100000);
+
+  state.err.code = static_cast<Encos::Controller::Error::Type>(data[0] & 0x1F);
 
   p_int = (data[1] << 8) | data[2];
   state.pos = uint2float(p_int, -posMax, posMax, 16);
