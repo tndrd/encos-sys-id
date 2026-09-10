@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -33,43 +34,56 @@ static void schedSetup() {
     fatal("sched_setaffinity", errno);
 }
 
-SignalGenerator::SignalGenerator(const std::string &interface, uint8_t id)
-    : m_encos{interface}, m_id{id} {}
+SignalGenerator::SignalGenerator(const std::string &interface)
+    : m_encos{interface} {}
 
-void SignalGenerator::setMode(Mode mode, float kmode) {
-  m_mode = mode;
-  m_kmode = kmode;
-}
-
-void SignalGenerator::setFactoryScales(bool use_factory_scale) {
-  m_encos.m_scales =
-      use_factory_scale ? Encos::Scales::factory() : Encos::Scales::tuned();
-}
-
-void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
+void SignalGenerator::playSignalLoop(const std::vector<MotorInput> &inputs,
                                      float dtms) {
+  assert(inputs.size() > 0);
+  size_t size = inputs[0].pos.size();
+
+  m_outputs = {};
+  for (const auto &input : inputs) {
+    MotorOutput output;
+
+    output.id = input.id;
+    output.scales = input.scales;
+    output.pos = std::vector<float>(size, 0);
+    output.vel = std::vector<float>(size, 0);
+    output.cur = std::vector<float>(size, 0);
+    output.ts = std::vector<uint64_t>(size, 0);
+
+    output.status =
+        std::vector<uint8_t>(size, Encos::Controller::Status::NoError);
+
+    m_outputs.emplace_back(output);
+  }
+
   timespec ts_next;
   clock_gettime(CLOCK_MONOTONIC, &ts_next);
 
-  m_pos = std::vector<float>(signal.size(), 0);
-  m_spd = std::vector<float>(signal.size(), 0);
-  m_cur = std::vector<float>(signal.size(), 0);
-  m_err = std::vector<const char*>(signal.size(), 0);
+  for (size_t isample = 0; isample < size; ++isample) {
+    for (int imotor = 0; imotor < inputs.size(); ++imotor) {
+      const auto &input = inputs[imotor];
+      auto &output = m_outputs[imotor];
 
-  for (size_t i = 0; i < signal.size(); ++i) {
-    float pos = (m_mode == Mode::Position) ? signal[i] : 0;
-    float kp = (m_mode == Mode::Position) ? m_kmode : 0;
+      Encos::Controller::Command cmd{input.kp[isample], input.kd[isample],
+                                     input.pos[isample], input.vel[isample],
+                                     input.trq[isample]};
 
-    float vel = (m_mode == Mode::Velocity) ? signal[i] : 0;
-    float kd = (m_mode == Mode::Velocity) ? m_kmode : 0;
+      Encos::Controller::State state =
+          m_encos.hybridControl(input.id, input.scales, cmd);
 
-    float trq = (m_mode == Mode::Torque) ? signal[i] : 0;
+      output.pos[isample] = state.pos;
+      output.vel[isample] = state.vel;
+      output.cur[isample] = state.cur;
 
-    auto state = m_encos.hybridControl(m_id, kp, kd, pos, vel, trq);
-    m_pos[i] = state.pos;
-    m_spd[i] = state.spd;
-    m_cur[i] = state.cur;
-    m_err[i] = state.err.string();
+      timespec ts_now;
+      clock_gettime(CLOCK_MONOTONIC, &ts_now);
+
+      output.ts[isample] = ts_now.tv_sec * 1000000000 + ts_now.tv_nsec;
+      output.status[isample] = state.status.code;
+    }
 
     ts_next.tv_nsec += long(dtms * 1000) * 1000;
 
@@ -80,125 +94,59 @@ void SignalGenerator::playSignalLoop(const std::vector<float> &signal,
 
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_next, NULL);
   }
-
-  m_encos.hybridControl(m_id, 0, 0, 0, 0, 0);
-}
-
-void SignalGenerator::playPDSignalLoop(const std::vector<float> &pos_signal,
-                                       const std::vector<float> &vel_signal,
-                                       float kp, float kd, float dtms) {
-  if (pos_signal.size() != vel_signal.size())
-    fatal("position and velocity signal lengths differ");
-
-  timespec ts_next;
-  clock_gettime(CLOCK_MONOTONIC, &ts_next);
-
-  m_pos = std::vector<float>(pos_signal.size(), 0);
-  m_spd = std::vector<float>(pos_signal.size(), 0);
-  m_cur = std::vector<float>(pos_signal.size(), 0);
-  m_err = std::vector<const char*>(pos_signal.size(), 0);
-
-  for (size_t i = 0; i < pos_signal.size(); ++i) {
-    auto state =
-        m_encos.hybridControl(m_id, kp, kd, pos_signal[i], vel_signal[i], 0);
-    m_pos[i] = state.pos;
-    m_spd[i] = state.spd;
-    m_cur[i] = state.cur;
-    m_err[i] = state.err.string();
-
-    ts_next.tv_nsec += long(dtms * 1000) * 1000;
-
-    if (ts_next.tv_nsec >= 1000000000) {
-      ts_next.tv_sec++;
-      ts_next.tv_nsec -= 1000000000;
-    }
-
-    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_next, NULL);
-  }
-
-  m_encos.hybridControl(m_id, 0, 0, 0, 0, 0);
 }
 
 void SignalGenerator::playSignalRoutine(SignalGenerator *self,
-                                        const std::vector<float> &signal,
+                                        const std::vector<MotorInput> &inputs,
                                         float dtms) {
   assert(self);
   self->m_exception = nullptr;
   try {
     schedSetup();
-    self->playSignalLoop(signal, dtms);
+    self->playSignalLoop(inputs, dtms);
   } catch (std::exception &e) {
     /// @todo properly catch the dynamic type of e
     self->m_exception = std::make_unique<std::runtime_error>(e.what());
   }
 }
 
-void SignalGenerator::playPDSignalRoutine(SignalGenerator *self,
-                                          const std::vector<float> &pos_signal,
-                                          const std::vector<float> &vel_signal,
-                                          float kp, float kd, float dtms) {
-  assert(self);
-  self->m_exception = nullptr;
-  try {
-    schedSetup();
-    self->playPDSignalLoop(pos_signal, vel_signal, kp, kd, dtms);
-  } catch (std::exception &e) {
-    /// @todo properly catch the dynamic type of e
-    self->m_exception = std::make_unique<std::runtime_error>(e.what());
-  }
+static void ensureSize(const std::vector<float> &a, size_t sz) {
+  if (a.size() != sz) throw std::runtime_error("Array size mismatch");
 }
 
-void SignalGenerator::brakeRoutine(SignalGenerator *self, float kp, float kd) {
-  assert(self);
-  self->m_exception = nullptr;
+void SignalGenerator::playSignal(const std::vector<MotorInput> &inputs,
+                                 float dtms) {
+  if (m_thread.get()) throw std::runtime_error("SignalGenerator is busy");
+  if (inputs.empty()) throw std::runtime_error("No inputs provided");
 
-  auto state = self->m_encos.hybridControl(self->m_id, 0, 0, 0, 0, 0);
+  // Ensure all inputs have same sizes
+  size_t size = inputs[0].pos.size();  // arbitrary input
 
-  try {
-    while (self->m_do_brake) {
-      self->m_encos.hybridControl(self->m_id, kp, kd, state.pos, 0, 0);
-      usleep(20 * 1000);
-    }
-  } catch (std::exception &e) {
-    /// @todo properly catch the dynamic type of e
-    self->m_exception = std::make_unique<std::runtime_error>(e.what());
+  for (const auto &input : inputs) {
+    ensureSize(input.kd, size);
+    ensureSize(input.kp, size);
+    ensureSize(input.pos, size);
+    ensureSize(input.trq, size);
+    ensureSize(input.vel, size);
   }
+
+  m_inputs = inputs;
+
+  m_exception = nullptr;
+  m_thread = std::make_unique<std::thread>(SignalGenerator::playSignalRoutine,
+                                           this, std::cref(m_inputs), dtms);
 }
 
-auto SignalGenerator::playSignal(const std::vector<float> &signal, float dtms)
-    -> Responce {
-  std::thread thread(SignalGenerator::playSignalRoutine, this,
-                     std::cref(signal), dtms);
-  thread.join();
+std::vector<SignalGenerator::MotorOutput> SignalGenerator::gather() {
+  if (!m_thread.get())
+    throw std::runtime_error("SignalGenerator is not running");
+
+  m_thread->join();
+  m_thread = nullptr;
+
+  // todo rollback
 
   if (m_exception.get()) throw *m_exception;
 
-  return {m_pos, m_spd, m_cur, m_err};
-}
-
-auto SignalGenerator::playPDSignal(const std::vector<float> &pos_signal,
-                                   const std::vector<float> &vel_signal,
-                                   float kp, float kd, float dtms) -> Responce {
-  std::thread thread(SignalGenerator::playPDSignalRoutine, this,
-                     std::cref(pos_signal), std::cref(vel_signal), kp, kd,
-                     dtms);
-  thread.join();
-
-  if (m_exception.get()) throw *m_exception;
-
-  return {m_pos, m_spd, m_cur, m_err};
-}
-
-void SignalGenerator::brake(float kp, float kd) {
-  if (m_brake_thread.get()) release();
-
-  m_do_brake = true;
-  m_brake_thread = std::make_unique<std::thread>(SignalGenerator::brakeRoutine,
-                                                 this, kp, kd);
-}
-
-void SignalGenerator::release() {
-  m_do_brake = false;
-  m_brake_thread->join();
-  m_brake_thread = nullptr;
+  return m_outputs;
 }

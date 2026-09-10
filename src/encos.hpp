@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+#include "scales.hpp"
+
 namespace Encos {
 
 // RAII wrapper for a file descriptor
@@ -53,23 +55,11 @@ uint16_t getId(const std::string& interface);
 void setZero(const std::string& interface);
 }  // namespace Tools
 
-struct Scales {
-  float kp, kd, pos, vel, trq, cur;
-
-  /// @brief Get scales by motor documentation
-  /// @return Standard scales
-  static Scales factory();
-
-  /// @brief Get tuned scales (applicable for most older motors)
-  /// @return Tuned scales
-  static Scales tuned();
-};
-
 // Encos controller
 struct Controller {
  public:
-  struct Error {
-    enum Type: uint8_t {
+  struct Status {
+    enum Type : uint8_t {
       // clang-format off
       NoError          = 0,
       OverTemperature  = 1,
@@ -86,16 +76,21 @@ struct Controller {
 
   struct State {
     float pos;  // rad
-    float spd;  // rad/s
+    float vel;  // rad/s
     float cur;  // A
-    Error err;
+    Status status;
+  };
+
+  struct Command {
+    float kp;
+    float kd;
+    float pos;
+    float vel;
+    float trq;
   };
 
  private:
   CANInterface m_can;
-
- public:
-  Scales m_scales = Scales::tuned();
 
  public:
   /// @brief Create a drive interface
@@ -111,8 +106,7 @@ struct Controller {
   /// @param vel Radians/s, ```-18 <= vel <= 18```
   /// @param trq Nm, ```-30 <= trq <= 30```
   /// @return Current state (rad, rad/s)
-  State hybridControl(uint32_t id, float kp, float kd, float pos, float vel,
-                      float trq);
+  State hybridControl(uint32_t id, Scales::Values scales, Command cmd);
 };
 
 }  // namespace Encos

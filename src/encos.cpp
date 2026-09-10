@@ -166,29 +166,7 @@ void Tools::setZero(const std::string& interface) {
   assert(cmd[3] == 0x03 && "Drive refused to set zero");
 }
 
-Scales Scales::factory() {
-  return {
-      500.f,  // kp
-      5.0f,   // kd
-      12.5f,  // pos
-      18.0f,  // vel
-      90.0f,  // trq
-      30.0f,  // cur
-  };
-}
-
-Scales Scales::tuned() {
-  return {
-      500.f,  // kp
-      10.0f,  // kd
-      10.0f,  // pos
-      20.0f,  // vel
-      90.0f,  // trq
-      30.0f,  // cur
-  };
-}
-
-const char* Controller::Error::string() const {
+const char* Controller::Status::string() const {
   switch (code) {
     // clang-format off
     #define CASE(x) case x: return #x
@@ -207,23 +185,15 @@ const char* Controller::Error::string() const {
 
 Controller::Controller(const std::string& interface) : m_can{interface} {}
 
-auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
-                               float vel, float trq) -> State {
+auto Controller::hybridControl(uint32_t id, Scales::Values scales, Command cmd)
+    -> State {
   using namespace Helpers;
 
-  // Values' scales for encoding
-  const float& kpMax = m_scales.kp;
-  const float& kdMax = m_scales.kd;
-  const float& posMax = m_scales.pos;
-  const float& velMax = m_scales.vel;
-  const float& trqMax = m_scales.trq;
-  const float& curMax = m_scales.cur;
-
-  uint16_t p_int = float2uint(pos, -posMax, posMax, 16);
-  uint16_t v_int = float2uint(vel, -velMax, velMax, 12);
-  uint16_t kp_int = float2uint(kp, 0, kpMax, 12);
-  uint16_t kd_int = float2uint(kd, 0, kdMax, 9);
-  uint16_t t_int = float2uint(trq, -trqMax, trqMax, 12);
+  uint16_t p_int = float2uint(cmd.pos, -scales.pos, scales.pos, 16);
+  uint16_t v_int = float2uint(cmd.vel, -scales.vel, scales.vel, 12);
+  uint16_t kp_int = float2uint(cmd.kp, 0, scales.kp, 12);
+  uint16_t kd_int = float2uint(cmd.kd, 0, scales.kd, 9);
+  uint16_t t_int = float2uint(cmd.trq, -scales.trq, scales.trq, 12);
 
   uint8_t data[8];
   data[0] = (kp_int >> 7) & 0x1F;
@@ -249,16 +219,17 @@ auto Controller::hybridControl(uint32_t id, float kp, float kd, float pos,
 
   assert(data[0] == 0b00100000);
 
-  state.err.code = static_cast<Encos::Controller::Error::Type>(data[0] & 0x1F);
+  state.status.code =
+      static_cast<Encos::Controller::Status::Type>(data[0] & 0x1F);
 
   p_int = (data[1] << 8) | data[2];
-  state.pos = uint2float(p_int, -posMax, posMax, 16);
+  state.pos = uint2float(p_int, -scales.pos, scales.pos, 16);
 
   v_int = (data[3] << 4) | (data[4] >> 4);
-  state.spd = uint2float(v_int, -velMax, velMax, 12);
+  state.vel = uint2float(v_int, -scales.vel, scales.vel, 12);
 
   t_int = ((data[4] & 0xF) << 8) | data[5];
-  state.cur = uint2float(t_int, -curMax, curMax, 12);
+  state.cur = uint2float(t_int, -scales.cur, scales.cur, 12);
 
   return state;
 }
