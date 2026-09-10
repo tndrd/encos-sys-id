@@ -1,3 +1,6 @@
 [submodule "lib/pybind11"]
 	path = lib/pybind11
 	url = https://github.com/pybind/pybind11.git
+[submodule "lib/tilkom-t42-driver"]
+	path = lib/tilkom-t42-driver
+	url = https://github.com/tndrd/tilkom-t42-driver.git

@@ -5,8 +5,17 @@ set(PYTHON_MODULE_NAME encosid)
 # Bindings
 add_subdirectory(lib/pybind11)
 
-pybind11_add_module(${PYTHON_MODULE_NAME} src/binding.cpp src/encos.cpp src/generator.cpp)
-target_link_libraries(${PYTHON_MODULE_NAME} PUBLIC pthread)
+# Tenso driver
+add_subdirectory(lib/tilkom-t42-driver)
+
+pybind11_add_module(${PYTHON_MODULE_NAME} 
+  src/binding.cpp
+  src/encos.cpp
+  src/generator.cpp
+  ${TILKOM_BINDING_SOURCES}
+)
+target_include_directories(${PYTHON_MODULE_NAME} PUBLIC ${TILKOM_BINDING_INCLUDE_DIR})
+target_link_libraries(${PYTHON_MODULE_NAME} PUBLIC pthread tilkom_t42)
 
 target_compile_definitions(${PYTHON_MODULE_NAME} PUBLIC 
   PYTHON_MODULE_NAME=${PYTHON_MODULE_NAME}
